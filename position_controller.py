@@ -6,15 +6,15 @@ import numpy as np
 
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import Odometry
+from roborts_msgs.msg import EstimatedState
 
 class Position_Controller:
 	def __init__(self):
 		self.publish_command = rospy.Publisher('/cmd_vel',Twist,queue_size=1)
-		rospy.Subscriber('/odom', Odometry, self.update_state)
+		rospy.Subscriber('/estimated_state', EstimatedState, self.update_state)
 		rospy.Subscriber('/goal_position',Twist,self.update_goal_postion)
 
-		self.state = Odometry
+		self.state = EstimatedState()
 
 		goal_position = rospy.get_param('goal_position', [2.7, 2.7, 1.2, 0])
 
@@ -31,14 +31,14 @@ class Position_Controller:
 		self.stop_cmd = stop
 
 		self.Kp_x = .3
-		self.Ki_x = 0
+		self.Ki_x = 0.
 		self.Kd_x = .36
 		self.Kp_y = .3
-		self.Ki_y = 0
+		self.Ki_y = 0.
 		self.Kd_y = .36
-		self.Kp_yaw = rospy.get_param('~Kp_yaw', 1)
-		self.Ki_yaw = 0
-		self.Kd_yaw = rospy.get_param('~Kd_yaw', 0) 
+		self.Kp_yaw = rospy.get_param('~Kp_yaw', 1.)
+		self.Ki_yaw = 0.
+		self.Kd_yaw = rospy.get_param('~Kd_yaw', 0.) 
 
 		self.max_xvel = 3.0
 		self.max_yvel = 2.0
@@ -50,7 +50,7 @@ class Position_Controller:
 		self.goal_position = wp
 
 	def update_state(self, state):
-		self.state = state.pose.pose.orientation
+		self.state = state
 		self.run_position_controller()
 
 
@@ -62,20 +62,20 @@ class Position_Controller:
 		yaw = goal.angular.z*np.pi/180
 		goal = np.array([[np.cos(yaw),-np.sin(yaw),goal.linear.x], \
 						[np.sin(yaw),np.cos(yaw),goal.linear.y],   \
-						[0,0,1]])
+						[0,0,1.]])
 
 		state = self.state
-		erroryaw = yaw*180/np.pi - state.w
+		erroryaw = yaw*180/np.pi - state.yaw
 
 		if erroryaw > 180:
 			erroryaw -= 360
 		elif erroryaw < -180:
 			erroryaw = yaw%360
 
-		yaw = state.w*np.pi/180
+		yaw = state.yaw*np.pi/180
 		state = np.array([[np.cos(yaw),-np.sin(yaw),state.x], \
 						  [np.sin(yaw),np.cos(yaw),state.y], \
-						  [0,0,1]])
+						  [0,0,1.]])
 
 		print '=============='
 		print "goal",self.goal_position
@@ -104,11 +104,11 @@ class Position_Controller:
 		print "Unbounded Command: x: %.2f y: %.2f yaw: %.2f" %(cmd_x,cmd_y,cmd_yaw)
 	  
 		# Saturate commands to safe limits
-		d = cmd_x**2 + cmd_y**2
-
-		if(d > self.max_vel**2):
-			rel = self.max_vel/np.sqrt(d)
+		if(abs(cmd_x) > self.max_xvel):
+			rel = self.max_xvel/abs(cmd_x)
 			cmd_x *= rel
+		if(abs(cmd_y) > self.max_yvel):
+			rel = self.max_yvel/abs(cmd_y)
 			cmd_y *= rel
 
 		if(cmd_yaw > 0):

@@ -1,6 +1,0 @@
-roslaunch roborts_bringup roborts_stage.launch
-then run the two scripts
-
-todo:
-edit fake_publisher to publish estimated_State messages
-edit position_controller to subscribe to those messages
