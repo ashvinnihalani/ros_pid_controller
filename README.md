@@ -1,4 +1,4 @@
-# ros_pid_controller
+# DJI RoboMaster - Berkeley PID Controller
 ROS PID Controller Movement
 
 Instructions for use:
