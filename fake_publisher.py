@@ -5,9 +5,7 @@ import math
 import numpy as np 
 
 from geometry_msgs.msg import Twist
-from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry as Odom
-from roborts_msgs.msg import TwistAccel
 
 class getState:
 	def __init__(self):
@@ -19,10 +17,13 @@ class getState:
 		self.state = state
 
 def quat_to_eul(state):
-	return np.arctan2(2*state.pose.pose.orientation.z*state.pose.pose.orientation.w,1-2*state.pose.pose.orientation.w**2)
+	return np.arctan2(2*(state.pose.pose.orientation.z*state.pose.pose.orientation.w),1-2*(state.pose.pose.orientation.w**2))
 
 def go_to(goal_position):
-	state = getState().state
+	state = getState()
+	rospy.sleep(.1)
+
+	state = state.state
 	state = np.array([state.pose.pose.position.x, state.pose.pose.position.y, \
 			quat_to_eul(state)])
 	diffArr = abs(goal_position - state)
@@ -33,30 +34,43 @@ def go_to(goal_position):
 	g.linear.y = goal_position[1]
 	g.angular.z = goal_position[2]
 
-	while (diff > .02):
+	while (diff > .1) and not rospy.is_shutdown():
 		fake.publish(g)
-		time.sleep(.5)
-
+		state = getState()
+		rospy.sleep(.1)
+		state = state.state
 		state = np.array([state.pose.pose.position.x, state.pose.pose.position.y, \
 			quat_to_eul(state)])
-		diffArr = abs(goal_position - state)
-		diff = np.max(diffArr)
+		diffArr = goal_position - state
+		diffArr[2] %= (2*3.14159)
+		if diffArr[2] > 3.14159:
+			diffArr[2] -= 2*3.14159
+		diff = max(abs(diffArr))
+		print(g.angular.z)
 
 if __name__ == '__main__':
 	rospy.init_node('fake_publisher')
-	fake = rospy.Publisher('goal_position', Twist, queue_size = 1)
+	fake = rospy.Publisher('/goal_position', Twist, queue_size = 1)
 
-	state = getState().state
+	state = getState()
+	rospy.sleep(.1)
+	state = state.state
 	init_state = np.array([state.pose.pose.position.x, state.pose.pose.position.y, \
 			quat_to_eul(state)])
 	
-	goal_positions = np.array([init_state + np.array([.1,0,0]), \
-					  init_state + np.array([.1,.1,0]), \
-					  init_state + np.array([0,.1,0]), \
-					  init_state + np.array([0,0,0])], \
-					  init_state + np.array([0,0,.5]))
-	while True:
-		for goal in goal_positions:
-			go_to(goal)
-	print 'Fake Publisher Running'
-	fake_publisher.run()
+	# goal_positions = np.array([init_state + np.array([.4,0,0]), \
+	# 				  init_state + np.array([.4,.4,0]), \
+	# 				  init_state + np.array([.4,0,0]), \
+	# 				  init_state + np.array([0,0,0])])
+	# for i in range(len(goal_positions)):
+	# 	go_to(goal_positions[i])
+	# 	print(i)
+
+	state = getState()
+	rospy.sleep(.1)
+	state = state.state
+
+	init_state = np.array([state.pose.pose.position.x, state.pose.pose.position.y, \
+			quat_to_eul(state)])
+	print(init_state)
+	go_to(init_state + np.array([0,0,-.5]))
