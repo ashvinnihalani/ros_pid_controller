@@ -5,39 +5,58 @@ import math
 import numpy as np 
 
 from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
-from roborts_msgs.msg import EstimatedState
+from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import Odometry as Odom
+from roborts_msgs.msg import TwistAccel
 
-class Fake_Publisher:
+class getState:
 	def __init__(self):
-		self.publish_command = rospy.Publisher('/goal_position', Twist, queue_size=1)
-		self.publish_state = rospy.Publisher('/estimated_state', EstimatedState, queue_size=1)
-		
-		g = Twist()
-		g.linear.x = 4.
-		g.linear.y = 3.
-		g.angular.z = 1.
-		self.g = g
+		rospy.Subscriber('/odom', Odom, self.update_state)
+		self.state = Odom()
 
-		state = EstimatedState()
-		state.x = 2.
-		state.y = 3.
-		state.yaw = 1.2
-		state.dx = .2
-		state.dy = 0.
-		state.dyaw = 0.
+	
+	def update_state(self, state):
 		self.state = state
 
-		self.rate = rospy.Rate(1)
-	
-	def run(self):
-		while not rospy.is_shutdown():
-			self.publish_command.publish(self.g)
-			self.publish_state.publish(self.state)
-			self.rate.sleep()
+def quat_to_eul(state):
+	return np.arctan2(2*state.pose.pose.orientation.z*state.pose.pose.orientation.w,1-2*state.pose.pose.orientation.w**2)
+
+def go_to(goal_position):
+	state = getState().state
+	state = np.array([state.pose.pose.position.x, state.pose.pose.position.y, \
+			quat_to_eul(state)])
+	diffArr = abs(goal_position - state)
+	diff = max(diffArr)
+
+	g = Twist()
+	g.linear.x = goal_position[0]
+	g.linear.y = goal_position[1]
+	g.angular.z = goal_position[2]
+
+	while (diff > .02):
+		fake.publish(g)
+		time.sleep(.5)
+
+		state = np.array([state.pose.pose.position.x, state.pose.pose.position.y, \
+			quat_to_eul(state)])
+		diffArr = abs(goal_position - state)
+		diff = np.max(diffArr)
 
 if __name__ == '__main__':
 	rospy.init_node('fake_publisher')
-	fake_publisher = Fake_Publisher()
+	fake = rospy.Publisher('goal_position', Twist, queue_size = 1)
+
+	state = getState().state
+	init_state = np.array([state.pose.pose.position.x, state.pose.pose.position.y, \
+			quat_to_eul(state)])
+	
+	goal_positions = np.array([init_state + np.array([.1,0,0]), \
+					  init_state + np.array([.1,.1,0]), \
+					  init_state + np.array([0,.1,0]), \
+					  init_state + np.array([0,0,0])], \
+					  init_state + np.array([0,0,.5]))
+	while True:
+		for goal in goal_positions:
+			go_to(goal)
 	print 'Fake Publisher Running'
 	fake_publisher.run()
