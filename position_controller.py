@@ -33,19 +33,19 @@ class Position_Controller:
 		stop.angular.z = 0
 		self.stop_cmd = stop
 
-		self.Kp_x = .3
+		self.Kp_x = .8
 		self.Ki_x = 0.
 		self.Kd_x = 0
-		self.Kp_y = .3
+		self.Kp_y = .8
 		self.Ki_y = 0.
 		self.Kd_y = 0
-		self.Kp_yaw = .3
+		self.Kp_yaw = .8
 		self.Ki_yaw = 0.
 		self.Kd_yaw = 0 
 
-		self.max_xvel = 3.0 # Meters /sec
-		self.max_yvel = 2.0 #Meters /sec 
-		self.max_yaw = 3.0 #radians sec
+		self.max_xvel = 3. # Meters /sec
+		self.max_yvel = 2. #Meters /sec 
+		self.max_yaw  = 3. #radians sec
  
 # =========== ROS Update Functions =========================================
 
@@ -92,31 +92,35 @@ class Position_Controller:
 
 		goal = self.goal_position #twist
 		curr_pos = self.state #Twist as well
-		#Conversion between quaterian and eurler
-		# yaw = np.arctan2(2*(self.state.pose.pose.orientation.z*self.state.pose.pose.orientation.w),1-2*(self.state.pose.pose.orientation.w**2))
-		#if erroryaw > 180:
-	#		erroryaw -= 360
-		#elif erroryaw < -180:
-		#	erroryaw = yaw%360
+		x, y, yaw = curr_pos.linear.x, curr_pos.linear.y, -curr_pos.angular.z
+		goal_x, goal_y, goal_yaw = goal.linear.x, goal.linear.y, -goal.angular.z
+		tf_mat = np.array([[np.cos(yaw),-np.sin(yaw),x], \
+			               [np.sin(yaw),np.cos(yaw),y],  \
+						   [0,0,1.0]])
+		goal = np.array([[np.cos(goal_yaw),-np.sin(goal_yaw),goal_x], \
+			             [np.sin(goal_yaw),np.cos(goal_yaw),goal_y],  \
+						 [0,0,1.0]])
 
-		#tf_mat = np.array([[np.cos(yaw),-np.sin(yaw),self.state.pose.pose.position.x], [np.sin(yaw),np.cos(yaw),self.state.pose.pose.position.y], [0,0,1.0]])
+		print '=============='
+		print "goal",goal_x, goal_y, goal_yaw
 
-		#print '=============='
-		#print "goal",self.goal_position
-
-		###############  INSERT CODE BELOW ######################
+		##############  INSERT CODE BELOW ######################
 		
 		# Calculate state error (HINT!! Rotate the errors into body frame)
-		#error = np.dot(np.linalg.inv(tf_mat),goal)
+		error = np.dot(np.linalg.inv(tf_mat),goal)
 
-		#errorx,errory= error[:2,2]
-		errorx,errory,erroryaw = goal.linear.x - curr_pos.linear.x , goal.linear.y - curr_pos.linear.y, goal.angular.z - curr_pos.angular.z
-		#print "State Error: x: %.2f y: %.2f yaw: %.2f" %(errorx,errory,erroryaw)
-		erroryaw = -erroryaw
+		errorx,errory= -error[:2,2]
+		
+		# errorx,errory,erroryaw = goal.linear.x - curr_pos.linear.x , goal.linear.y - curr_pos.linear.y, goal.angular.z - curr_pos.angular.z
+		# erroryaw = -errroryaw
+
+		erroryaw = (goal_yaw - yaw)
 		erroryaw %= 2*3.14159
 		if erroryaw > 3.14159:
 			erroryaw -= 2*3.14159
 		print(erroryaw)
+		print "State Error: x: %.2f y: %.2f yaw: %.2f" %(errorx,errory,erroryaw)
+		
 
 
 		# Calculate twist commands in each axis
@@ -156,7 +160,7 @@ class Position_Controller:
 		cmd_out.twist.linear.x = cmd_x
 		cmd_out.twist.linear.y = cmd_y
 		cmd_out.twist.angular.z = cmd_yaw
-		print(curr_pos.linear.x, curr_pos.linear.y, curr_pos.angular.z)
+		print("current state", curr_pos.linear.x, curr_pos.linear.y, curr_pos.angular.z)
 		self.publish_command.publish(cmd_out)
 
 
