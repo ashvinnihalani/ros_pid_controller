@@ -5,9 +5,9 @@ import math
 import numpy as np 
 
 from geometry_msgs.msg import Twist
-# from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import Odometry as Odom
+from geometry_msgs.msg import PoseStamped
 from roborts_msgs.msg import TwistAccel
+from std_msgs.msg import Bool
 
 class Position_Controller:
 	def __init__(self):
@@ -18,7 +18,8 @@ class Position_Controller:
 		self.last_state = Twist()
 		#Set the publish and the subsriber
 		self.publish_command = rospy.Publisher('/cmd_vel_acc',TwistAccel,queue_size=1)
-		rospy.Subscriber('/odom', Odom, self.update_state)
+		self.publish_goal_reached = rospy.Publisher('/goal_position_cb', Bool)
+		rospy.Subscriber('/amcl_pose', PoseStamped, self.update_state)
 		rospy.Subscriber('/goal_position',Twist,self.update_goal_postion)
 		# Topic goal position needed from path planning
 		
@@ -27,21 +28,23 @@ class Position_Controller:
 #		g.angular.z = self.init_goal[2]
 		self.goal_position = Twist()
 
-		stop = Twist()
-		stop.linear.x = 0
-		stop.linear.y = 0
-		stop.angular.z = 0
+		stop = TwistAccel()
+		stop.twist.linear.x = 0
+		stop.twist.linear.y = 0
+		stop.twist.angular.z = 0
 		self.stop_cmd = stop
 
-		self.Kp_x = .8
+		self.Kp_x = 1
 		self.Ki_x = 0.
-		self.Kd_x = 0
-		self.Kp_y = .8
+		self.Kd_x = .5
+		self.Kp_y = 1
 		self.Ki_y = 0.
-		self.Kd_y = 0
+		self.Kd_y = .5
 		self.Kp_yaw = .8
 		self.Ki_yaw = 0.
-		self.Kd_yaw = 0 
+		self.Kd_yaw = .2
+
+		self.prev = None
 
 		self.max_xvel = 3. # Meters /sec
 		self.max_yvel = 2. #Meters /sec 
@@ -53,20 +56,14 @@ class Position_Controller:
 		self.goal_position = wp
 
 	def update_state(self, state_odom):
-
 		#Make sure there is an inital state first. 
 		if self.flag == 0:
 			self.func_init_goal()
 		self.state = Twist()
-		self.state.linear.x = state_odom.pose.pose.position.x
-		self.state.linear.y = state_odom.pose.pose.position.y
-		self.state.angular.z = np.arctan2(2*(state_odom.pose.pose.orientation.z*state_odom.pose.pose.orientation.w),1-2*(state_odom.pose.pose.orientation.w**2))
+		self.state.linear.x = state_odom.pose.position.x
+		self.state.linear.y = state_odom.pose.position.y
+		self.state.angular.z = np.arctan2(2*(state_odom.pose.orientation.z*state_odom.pose.orientation.w),1-2*(state_odom.pose.orientation.w**2))
 		self.run_position_controller()
-		self.last_state = self.state 
-		self.state = Twist()
-		self.state.linear.x = state_odom.pose.pose.position.x
-		self.state.linear.y = state_odom.pose.pose.position.y
-		self.state.angular.z = np.arctan2(2*(state_odom.pose.pose.orientation.z*state_odom.pose.pose.orientation.w),1-2*(state_odom.pose.pose.orientation.w**2))
 		print('Update State', self.state.linear.x,  self.state.linear.y, self.state.angular.z)
 	
 	def func_init_goal(self):
@@ -93,7 +90,13 @@ class Position_Controller:
 		goal = self.goal_position #twist
 		curr_pos = self.state #Twist as well
 		x, y, yaw = curr_pos.linear.x, curr_pos.linear.y, -curr_pos.angular.z
+		if self.prev:
+			dx, dy, dyaw = x - self.prev.linear.x, y - self.prev.linear.y, yaw + self.prev.angular.z
+			dx, dy = dx * np.cos(yaw) + dy * np.sin(yaw), dx * np.sin(yaw) + dy * np.cos(yaw)
+		else:
+			dx, dy, dyaw = 0, 0, 0
 		goal_x, goal_y, goal_yaw = goal.linear.x, goal.linear.y, -goal.angular.z
+
 		tf_mat = np.array([[np.cos(yaw),-np.sin(yaw),x], \
 			               [np.sin(yaw),np.cos(yaw),y],  \
 						   [0,0,1.0]])
@@ -121,14 +124,16 @@ class Position_Controller:
 		print(erroryaw)
 		print "State Error: x: %.2f y: %.2f yaw: %.2f" %(errorx,errory,erroryaw)
 		
+		if errorx < .1 and errory < .1:
+			self.publish_goal_reached.publish(Bool(data=True))
 
 
 		# Calculate twist commands in each axis
 		# state = self.state
 		# calculate vel 
-		dx = self.state.linear.x - self.last_state.linear.x 
-		dy = self.state.linear.y - self.last_state.linear.y 
-		dyaw = self.state.angular.y - self.last_state.angular.y 
+		# dx = self.state.linear.x - self.last_state.linear.x 
+		# dy = self.state.linear.y - self.last_state.linear.y 
+		# dyaw = self.state.angular.y - self.last_state.angular.y 
 
 		#dx_global = dx*np.cos(yaw) + dy*np.sin(yaw)
 		#dy_global = -dx*np.sin(yaw) + dy*np.cos(yaw)
@@ -161,6 +166,7 @@ class Position_Controller:
 		cmd_out.twist.linear.y = cmd_y
 		cmd_out.twist.angular.z = cmd_yaw
 		print("current state", curr_pos.linear.x, curr_pos.linear.y, curr_pos.angular.z)
+		self.prev = self.state
 		self.publish_command.publish(cmd_out)
 
 
