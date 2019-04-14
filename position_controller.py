@@ -39,10 +39,10 @@ class Position_Controller:
 
 		self.Kp_x = 1
 		self.Ki_x = 0.
-		self.Kd_x = .5
+		self.Kd_x = .8
 		self.Kp_y = 1
 		self.Ki_y = 0.
-		self.Kd_y = .5
+		self.Kd_y = .8
 		self.Kp_yaw = .8
 		self.Ki_yaw = 0.
 		self.Kd_yaw = .2
