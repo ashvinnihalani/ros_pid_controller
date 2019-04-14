@@ -8,7 +8,7 @@ from geometry_msgs.msg import Twist
 from geometry_msgs.msg import PoseStamped
 from roborts_msgs.msg import TwistAccel
 from std_msgs.msg import Bool
-
+from geometry_msgs.msg import Vector3
 class Position_Controller:
 	def __init__(self):
 		print('Intialize')
@@ -21,6 +21,9 @@ class Position_Controller:
 		self.publish_goal_reached = rospy.Publisher('/goal_position_cb', Bool)
 		rospy.Subscriber('/amcl_pose', PoseStamped, self.update_state)
 		rospy.Subscriber('/goal_position',Twist,self.update_goal_postion)
+		rospy.Subscriber('/tuning_pid_x',Vector3,self.update_param_x)
+		rospy.Subscriber('/tuning_pid_y',Vector3,self.update_param_y)
+		rospy.Subscriber('/tuning_pid_z',Vector3,self.update_param_z)
 		# Topic goal position needed from path planning
 		
 #		g.linear.x = self.init_goal[0]
@@ -51,9 +54,21 @@ class Position_Controller:
 		self.max_yaw  = 3. #radians sec
  
 # =========== ROS Update Functions =========================================
-
+	def update_param_x(self, v3):
+		self.Kp_x = v3.x
+		self.Ki_x = v3.y
+		self.Kd_x = v3.z
+	def update_param_y(self, v3):
+		self.Kp_y = v3.x
+		self.Ki_y = v3.y
+		self.Kd_y = v3.z
+	def update_param_z(self, v3):
+		self.Kp_yaw = v3.x
+		self.Ki_yaw = v3.y
+		self.Kd_yaw = v3.z
 	def update_goal_postion(self, wp):
 		self.goal_position = wp
+		self.flag = 1
 
 	def update_state(self, state_odom):
 		#Make sure there is an inital state first. 
@@ -71,7 +86,6 @@ class Position_Controller:
 		self.goal_position.linear.x = pos.linear.x 
 		self.goal_position.linear.y = pos.linear.y
 		self.goal_position.angular.z = pos.angular.z - 5.8
-		self.flag = 1
 
 	def check_reached(self):
 		threshhold_xy = .01 #Meters
