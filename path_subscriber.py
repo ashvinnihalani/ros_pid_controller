@@ -3,14 +3,15 @@
 import rospy
 import math
 import numpy as np 
-
+#import pprint
 from geometry_msgs.msg import Twist, PoseStamped, Pose
 from nav_msgs.msg import Odometry as Odom
 from nav_msgs.msg import Path
 from std_msgs.msg import Bool
 
 from tf.transformations import euler_from_quaternion
-
+epsilon = 2.220446049250313e-16 # Episalon for floating point comparasion
+pp = None
 class PathSubscriber():
 	"""docstring for PathSubscriber"""
 	def __init__(self):
@@ -33,70 +34,61 @@ class PathSubscriber():
 		self.odom = msg.pose 
 
 	def wp_publisher(self):
-		r = rospy.Rate(10)
+		pp.pprint(self.path.poses)
+		print 'Len of Queue of Waypoints' + str(len(self.path.poses))
 		if len(self.path.poses) > 0:
+			pose = self.path.poses.pop(0)
 			while len(self.path.poses) > 3:
 				first = self.path.poses.pop(0)
 				second = self.path.poses.pop(0)
 				third = self.path.poses.pop(0)
-				if (isBetween(first,second,third):
-				    self.path.poses.push(third)
-				    self.path.poses.push(first)
-			t_min_pose = self.path.poses.pop(0)
-			t_min = Twist()
-			t_min.linear.x = t_min_pose.pose.position.x
-			t_min.linear.y = t_min_pose.pose.position.y
-			t_min.angular.z = self.get_euler_yaw(t_min_pose.pose.orientation)
-			print "Goal: x: %.2f y: %.2f yaw: %.2f" %(t_min.linear.x,t_min.linear.y,t_min.angular.z)
+				if self.isBetween(first,second,third):
+					self.path.poses.insert(0,third)
+					self.path.poses.insert(0,first)
+					print "Trimming Path"
+				else:
+					self.path.poses.insert(0,third)
+					self.path.poses.insert(0,second)
+					self.path.poses.insert(0,first)
+					break
+				
+			if len(self.path.poses) > 0:
+				pose = self.path.poses.pop(0)
+			wp = Twist()
+			wp.linear.x = pose.pose.position.x
+			wp.linear.y = pose.pose.position.y
+			if len(self.path.poses) > 0:
+				wp.angular.z = self.get_euler_yaw(self.path.poses[-1].pose.orientation)
+			else:
+				wp.angular.z = self.get_euler_yaw(pose.pose.orientation)
+			print "Goal: x: %.2f y: %.2f yaw: %.2f" %(wp.linear.x,wp.linear.y,wp.angular.z)
 
 
-			self.wp_pub.publish(t_min)
+			self.wp_pub.publish(wp)
+	def isBetween(self,a, b, c):
+			crossproduct = (c.pose.position.y - a.pose.position.y) * (b.pose.position.x - a.pose.position.x) - (c.pose.position.x - a.pose.position.x) * (b.pose.position.y - a.pose.position.y)
+			if abs(crossproduct) > epsilon:
+				return False
+			return True
+			dotproduct = (c.pose.position.x - a.pose.position.x) * (b.pose.position.x - a.pose.position.x) + (c.pose.position.y - a.pose.position.y)*(b.pose.position.y - a.pose.position.y)
+			if dotproduct < 0:
+				return False
 
+			squaredlengthba = (b.pose.position.x - a.pose.position.x)*(b.pose.position.x - a.pose.position.x) + (b.pose.position.y - a.pose.position.y)*(b.pose.position.y - a.pose.position.y)
+			if dotproduct > squaredlengthba:
+				return False
+			return True
 	def wp_publisher_cb(self, msg):
 		if msg.data:
 			self.wp_publisher()
 
-	def isBetween(a, b, c):
-    		crossproduct = (c.pose.position.y - a.pose.position.y) * (b.pose.position.x - a.pose.position.x) - (c.pose.position.x - a.pose.position.x) * (b.pose.position.y - a.pose.position.y)
 
-    		# compare versus epsilon for floating point values, or != 0 if using integers
-    		if abs(crossproduct) > epsilon:
-        		return False
-
-		dotproduct = (c.pose.position.x - a.pose.position.x) * (b.pose.position.x - a.pose.position.x) + (c.pose.position.y - a.pose.position.y)*(b.pose.position.y - a.pose.position.y)
-		if dotproduct < 0:
-			return False
-
-		squaredlengthba = (b.pose.position.x - a.pose.position.x)*(b.pose.position.x - a.pose.position.x) + (b.pose.position.y - a.pose.position.y)*(b.pose.position.y - a.pose.position.y)
-		if dotproduct > squaredlengthba:
-			return False
-
-		return True
 	def get_euler_yaw(self, orientation):
 		euler = euler_from_quaternion([orientation.x,orientation.y,orientation.z,orientation.w])
 		return euler[2]
 
-	def get_error(self, goal_twist, curr_pose):
-		state = np.array([curr_pose.position.x, curr_pose.position.y, self.get_euler_yaw(curr_pose.orientation)])
-		goal_position = np.array([goal_twist.linear.x, goal_twist.linear.y, goal_twist.angular.z])
-		diffArr = goal_position - state
-		dist_err = math.sqrt(diffArr[0]*diffArr[0] + diffArr[1]*diffArr[1])
-		yaw_err = abs(diffArr[2])
-		yaw_err %= (2*3.14159)
-		if yaw_err > 3.14159:
-			yaw_err -= 2*3.14159
-		return dist_err, yaw_err
-
-	def go_to(self, goal_twist):
-		dist_err, yaw_err = self.get_error(goal_twist,self.odom)
-
-		r = rospy.Rate(10)
-		while (dist_err > .1) and yaw_err > np.deg2rad(2.5) and not rospy.is_shutdown():
-			self.wp_pub.publish(goal_twist)
-			dist_err, yaw_err = self.get_error(goal_twist,self.odom)
-			r.sleep()
-
 if __name__ == '__main__':
 	rospy.init_node('path_subscriber')
 	ps = PathSubscriber()
+#	pp = pprint.PrettyPrinter(indent=4)
 	rospy.spin()
