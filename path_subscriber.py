@@ -35,6 +35,13 @@ class PathSubscriber():
 	def wp_publisher(self):
 		r = rospy.Rate(10)
 		if len(self.path.poses) > 0:
+			while len(self.path.poses) > 3:
+				first = self.path.poses.pop(0)
+				second = self.path.poses.pop(0)
+				third = self.path.poses.pop(0)
+				if (isBetween(first,second,third):
+				    self.path.poses.push(third)
+				    self.path.poses.push(first)
 			t_min_pose = self.path.poses.pop(0)
 			t_min = Twist()
 			t_min.linear.x = t_min_pose.pose.position.x
@@ -49,7 +56,22 @@ class PathSubscriber():
 		if msg.data:
 			self.wp_publisher()
 
+	def isBetween(a, b, c):
+    		crossproduct = (c.pose.position.y - a.pose.position.y) * (b.pose.position.x - a.pose.position.x) - (c.pose.position.x - a.pose.position.x) * (b.pose.position.y - a.pose.position.y)
 
+    		# compare versus epsilon for floating point values, or != 0 if using integers
+    		if abs(crossproduct) > epsilon:
+        		return False
+
+		dotproduct = (c.pose.position.x - a.pose.position.x) * (b.pose.position.x - a.pose.position.x) + (c.pose.position.y - a.pose.position.y)*(b.pose.position.y - a.pose.position.y)
+		if dotproduct < 0:
+			return False
+
+		squaredlengthba = (b.pose.position.x - a.pose.position.x)*(b.pose.position.x - a.pose.position.x) + (b.pose.position.y - a.pose.position.y)*(b.pose.position.y - a.pose.position.y)
+		if dotproduct > squaredlengthba:
+			return False
+
+		return True
 	def get_euler_yaw(self, orientation):
 		euler = euler_from_quaternion([orientation.x,orientation.y,orientation.z,orientation.w])
 		return euler[2]
