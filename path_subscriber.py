@@ -34,7 +34,7 @@ class PathSubscriber():
 		self.odom = msg.pose 
 
 	def wp_publisher(self):
-		pp.pprint(self.path.poses)
+		#pp.pprint(self.path.poses)
 		print 'Len of Queue of Waypoints' + str(len(self.path.poses))
 		if len(self.path.poses) > 0:
 			pose = self.path.poses.pop(0)
